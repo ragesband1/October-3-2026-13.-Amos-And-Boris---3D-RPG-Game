@@ -1,0 +1,1277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>13. Amos And Boris - 3D RPG Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;700;900&display=swap');
+
+        * {
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Nunito', sans-serif;
+            background-color: #031327;
+            color: #fff;
+        }
+
+        .font-title {
+            font-family: 'Fredoka One', cursive;
+        }
+
+        /* Glassmorphism Styling */
+        .glass-panel {
+            background: rgba(11, 29, 58, 0.75);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        .glass-btn {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.05));
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            transition: all 0.2s ease-in-out;
+        }
+
+        .glass-btn:hover {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.15));
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0,210,255,0.4);
+        }
+
+        .glass-btn:active {
+            transform: translateY(1px);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.2);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(56, 189, 248, 0.5);
+            border-radius: 4px;
+        }
+
+        /* Radar Mini-map Clip */
+        #minimap-container {
+            border-radius: 50%;
+            border: 3px solid #38bdf8;
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.5);
+        }
+
+        /* Joystick styles */
+        #joystick-zone {
+            position: absolute;
+            bottom: 25px;
+            left: 25px;
+            width: 120px;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            touch-action: none;
+            z-index: 40;
+            display: none;
+        }
+        #joystick-knob {
+            position: absolute;
+            top: 35px;
+            left: 35px;
+            width: 50px;
+            height: 50px;
+            background: radial-gradient(circle, #38bdf8 0%, #0284c7 100%);
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(56,189,248,0.8);
+        }
+
+        /* Damage text float animation */
+        @keyframes damageFloat {
+            0% { opacity: 1; transform: translateY(0) scale(1); }
+            50% { opacity: 1; transform: translateY(-30px) scale(1.3); }
+            100% { opacity: 0; transform: translateY(-50px) scale(0.8); }
+        }
+        .damage-popup {
+            position: absolute;
+            animation: damageFloat 0.8s ease-out forwards;
+            font-family: 'Fredoka One', cursive;
+            pointer-events: none;
+            z-index: 50;
+            text-shadow: 2px 2px 0 #000;
+        }
+    </style>
+</head>
+<body class="relative w-full h-full overflow-hidden select-none">
+
+    <div id="game-container" class="absolute inset-0 w-full h-full"></div>
+
+    <div id="hud-layer" class="absolute inset-0 pointer-events-none z-10 flex flex-col justify-between p-4 md:p-6">
+        
+        <!-- Top HUD -->
+        <div class="flex justify-between items-start w-full gap-4">
+            <!-- Player Stats & Avatar -->
+            <div class="glass-panel p-3 rounded-2xl flex items-center gap-4 pointer-events-auto min-w-[280px] md:min-w-[340px]">
+                <div class="relative">
+                    <div id="char-avatar" class="w-16 h-16 rounded-xl bg-gradient-to-tr from-amber-500 to-yellow-300 flex items-center justify-center text-3xl shadow-lg border-2 border-white/50">
+                        🐭
+                    </div>
+                    <span id="char-level" class="absolute -bottom-2 -right-2 bg-sky-500 text-white font-title text-xs px-2 py-0.5 rounded-full border border-white">Lvl 1</span>
+                </div>
+                <div class="flex-1">
+                    <div class="flex justify-between items-center mb-1">
+                        <span id="char-name" class="font-title text-lg text-sky-300 tracking-wide">Amos (Mouse)</span>
+                        <span id="char-class-tag" class="text-xs bg-amber-500/30 text-amber-300 px-2 py-0.5 rounded-md border border-amber-500/40 font-semibold">Agility</span>
+                    </div>
+                    <!-- HP Bar -->
+                    <div class="w-full bg-slate-800/80 rounded-full h-3.5 mb-1.5 p-0.5 border border-white/10 relative overflow-hidden">
+                        <div id="hp-bar" class="bg-gradient-to-r from-emerald-500 to-green-400 h-full rounded-full transition-all duration-300" style="width: 100%;"></div>
+                        <span id="hp-text" class="absolute inset-0 text-[10px] font-bold flex items-center justify-center text-white drop-shadow">100 / 100</span>
+                    </div>
+                    <!-- EXP Bar -->
+                    <div class="w-full bg-slate-800/80 rounded-full h-2 p-0.5 border border-white/10 relative overflow-hidden">
+                        <div id="exp-bar" class="bg-gradient-to-r from-amber-400 to-orange-500 h-full rounded-full transition-all duration-300" style="width: 0%;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Middle Title Header & Active Quest Widget -->
+            <div class="hidden md:flex flex-col items-center pointer-events-auto">
+                <h1 class="font-title text-2xl text-transparent bg-clip-text bg-gradient-to-r from-sky-400 via-amber-300 to-emerald-400 drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)]">
+                    13. Amos And Boris
+                </h1>
+                <div id="quest-tracker-widget" class="glass-panel px-4 py-2 rounded-xl mt-2 text-center max-w-md border-sky-500/30">
+                    <div class="text-xs text-amber-400 font-bold uppercase tracking-wider flex items-center justify-center gap-1">
+                        <i class="fa-solid fa-scroll text-xs"></i> Current Objective
+                    </div>
+                    <div id="quest-tracker-text" class="text-sm font-semibold text-sky-100 mt-0.5">
+                        Survive the raging hurricane and locate Boris!
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mini Map & Action Buttons -->
+            <div class="flex items-start gap-3 pointer-events-auto">
+                <!-- UI Toggle Buttons -->
+                <div class="flex flex-col gap-2">
+                    <button id="btn-inventory" onclick="toggleWindow('inventory-modal')" class="glass-btn w-10 h-10 rounded-xl flex items-center justify-center text-sky-300 hover:text-white" title="Inventory">
+                        <i class="fa-solid fa-briefcase text-lg"></i>
+                    </button>
+                    <button id="btn-skills" onclick="toggleWindow('skills-modal')" class="glass-btn w-10 h-10 rounded-xl flex items-center justify-center text-amber-300 hover:text-white" title="Skills & Stats">
+                        <i class="fa-solid fa-brain text-lg"></i>
+                    </button>
+                    <button id="btn-quests" onclick="toggleWindow('quests-modal')" class="glass-btn w-10 h-10 rounded-xl flex items-center justify-center text-emerald-300 hover:text-white" title="Quest Log">
+                        <i class="fa-solid fa-map-location-dot text-lg"></i>
+                    </button>
+                    <button id="btn-character" onclick="switchCharacter()" class="glass-btn w-10 h-10 rounded-xl flex items-center justify-center text-purple-300 hover:text-white" title="Switch Hero">
+                        <i class="fa-solid fa-rotate text-lg"></i>
+                    </button>
+                </div>
+
+                <!-- Mini Map Radar -->
+                <div id="minimap-container" class="relative w-28 h-28 md:w-32 md:h-32 bg-slate-900/90 overflow-hidden">
+                    <canvas id="minimap-canvas" class="w-full h-full"></canvas>
+                    <div class="absolute inset-0 pointer-events-none border border-sky-400/30 rounded-full"></div>
+                    <div class="absolute top-1/2 left-1/2 w-2 h-2 bg-emerald-400 rounded-full -translate-x-1/2 -translate-y-1/2 shadow-[0_0_8px_#34d399]"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mobile Quest Tracker (Visible on small screens) -->
+        <div class="md:hidden glass-panel p-2.5 rounded-xl pointer-events-auto mb-2 text-center">
+            <div class="text-[10px] text-amber-400 font-bold uppercase tracking-wider">Current Objective</div>
+            <div id="quest-tracker-text-mobile" class="text-xs font-semibold text-sky-100">Survive the raging ocean hurricane!</div>
+        </div>
+
+        <!-- Bottom HUD Actions & Skill Bar -->
+        <div class="flex justify-between items-end w-full gap-4">
+            <!-- Left: Character Swap Quick Panel -->
+            <div class="hidden sm:flex glass-panel p-2 rounded-2xl items-center gap-2 pointer-events-auto">
+                <button onclick="selectCharacter('amos')" class="px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 bg-amber-500/30 border border-amber-400/50 text-amber-200 hover:bg-amber-500/50">
+                    🐭 Amos (Agile)
+                </button>
+                <button onclick="selectCharacter('boris')" class="px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 bg-blue-500/30 border border-blue-400/50 text-blue-200 hover:bg-blue-500/50">
+                    🐳 Boris (Tank)
+                </button>
+            </div>
+
+            <!-- Center: Skill Bar Buttons -->
+            <div class="glass-panel p-2 md:p-3 rounded-2xl flex items-center gap-2 md:gap-3 pointer-events-auto mx-auto">
+                <button onclick="useSkill(0)" class="relative glass-btn w-12 h-12 md:w-14 md:h-14 rounded-xl flex flex-col items-center justify-center group">
+                    <span id="skill-0-icon" class="text-xl md:text-2xl">⚡</span>
+                    <span class="text-[9px] font-bold text-slate-300">Dash [Q]</span>
+                    <div id="skill-0-cooldown" class="absolute inset-0 bg-slate-950/80 rounded-xl hidden flex items-center justify-center font-bold text-amber-400 text-xs"></div>
+                </button>
+
+                <button onclick="performAttack()" class="glass-btn w-14 h-14 md:w-16 md:h-16 rounded-xl flex flex-col items-center justify-center bg-gradient-to-tr from-rose-600/50 to-amber-500/40 border-amber-400/60 shadow-lg shadow-rose-950/50 group">
+                    <span class="text-2xl md:text-3xl">⚔️</span>
+                    <span class="text-[10px] font-bold text-amber-200">Attack [Space]</span>
+                </button>
+
+                <button onclick="useSkill(1)" class="relative glass-btn w-12 h-12 md:w-14 md:h-14 rounded-xl flex flex-col items-center justify-center group">
+                    <span id="skill-1-icon" class="text-xl md:text-2xl">🌊</span>
+                    <span class="text-[9px] font-bold text-slate-300">Splash [E]</span>
+                    <div id="skill-1-cooldown" class="absolute inset-0 bg-slate-950/80 rounded-xl hidden flex items-center justify-center font-bold text-amber-400 text-xs"></div>
+                </button>
+
+                <button onclick="useSkill(2)" class="relative glass-btn w-12 h-12 md:w-14 md:h-14 rounded-xl flex flex-col items-center justify-center group">
+                    <span id="skill-2-icon" class="text-xl md:text-2xl">🐘</span>
+                    <span class="text-[9px] font-bold text-slate-300">Stomp [R]</span>
+                    <div id="skill-2-cooldown" class="absolute inset-0 bg-slate-950/80 rounded-xl hidden flex items-center justify-center font-bold text-amber-400 text-xs"></div>
+                </button>
+            </div>
+
+            <!-- Right: Controls Hint -->
+            <div class="hidden lg:block glass-panel p-3 rounded-xl text-right text-xs text-sky-200/80 pointer-events-auto">
+                <div class="font-bold text-sky-400 mb-1">🎮 Keybinds</div>
+                <div>Move: <span class="text-white font-mono bg-slate-800 px-1 rounded">WASD</span> / Arrows</div>
+                <div>Attack: <span class="text-white font-mono bg-slate-800 px-1 rounded">Space</span></div>
+                <div>Skills: <span class="text-white font-mono bg-slate-800 px-1 rounded">Q, E, R</span></div>
+                <div>Interact: <span class="text-white font-mono bg-slate-800 px-1 rounded">F</span></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="joystick-zone">
+        <div id="joystick-knob"></div>
+    </div>
+
+    <div id="story-modal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div class="glass-panel max-w-2xl w-full p-6 md:p-8 rounded-3xl border-sky-500/40 shadow-2xl relative flex flex-col gap-6">
+            <div class="text-center">
+                <span class="text-xs uppercase font-bold tracking-widest text-amber-400 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/30">Story Tale Chapter 5</span>
+                <h2 class="font-title text-3xl md:text-4xl text-sky-300 mt-2">13. Amos And Boris</h2>
+                <p class="text-xs text-sky-200/60 mt-1">Written by Newtwart Stakeham | March 4 2017</p>
+            </div>
+
+            <div class="bg-slate-900/80 p-5 rounded-2xl border border-white/10 text-sm md:text-base leading-relaxed text-sky-100 max-h-60 overflow-y-auto space-y-3">
+                <p>
+                    <strong class="text-amber-300">Once upon a time</strong>, there was a giant whale named <span class="text-blue-300 font-bold">Boris</span> and a brave mouse named <span class="text-amber-300 font-bold">Amos</span>. They were the truest best friends. 
+                </p>
+                <p>
+                    Suddenly, beneath the watersides near a boat, a massive hurricane struck! A ferocious tidal wave separated Amos and Boris in the dark ocean depths.
+                </p>
+                <p>
+                    On the second day, Boris fought through rogue waves to rescue Amos. Joined by a heroic <span class="text-purple-300 font-bold">Elephant</span> in this tragic ordeal, they swore never to let go of each other.
+                </p>
+                <blockquote class="p-3 bg-amber-500/10 border-l-4 border-amber-400 text-amber-200 italic rounded-r-xl text-xs md:text-sm">
+                    "Moral Lesson: Real best friends never betray each other—they save one another from the most tragic experiences."
+                </blockquote>
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-3 justify-end">
+                <button onclick="startGame()" class="glass-btn px-8 py-3.5 rounded-2xl font-title text-lg bg-gradient-to-r from-emerald-500 to-sky-500 text-white shadow-lg hover:from-emerald-400 hover:to-sky-400 flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-play"></i> Start Ocean Adventure
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="dialogue-modal" class="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-40 hidden flex items-end md:items-center justify-center p-4">
+        <div class="glass-panel max-w-xl w-full p-6 rounded-2xl border-sky-400/30 flex flex-col gap-4 animate-fade-in">
+            <div class="flex items-center gap-4">
+                <div id="npc-avatar" class="w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-3xl">
+                    🐘
+                </div>
+                <div>
+                    <h3 id="npc-name" class="font-title text-xl text-amber-300">Heroic Elephant</h3>
+                    <p id="npc-title" class="text-xs text-sky-200/70">Guardian of the Shore</p>
+                </div>
+            </div>
+            <p id="npc-dialogue-text" class="text-sm md:text-base text-sky-100 bg-slate-900/60 p-4 rounded-xl border border-white/5">
+                Hold tight, small friend! The hurricane currents are fierce, but together we can rescue Boris from the Kraken!
+            </p>
+            <div class="flex justify-end gap-3">
+                <button id="npc-action-btn" onclick="acceptNPCQuest()" class="glass-btn px-5 py-2.5 rounded-xl font-bold text-sm bg-sky-500/40 text-sky-200 hover:bg-sky-500/60">
+                    Accept Quest
+                </button>
+                <button onclick="closeDialogue()" class="glass-btn px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-300">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="inventory-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-40 hidden flex items-center justify-center p-4">
+        <div class="glass-panel max-w-lg w-full p-6 rounded-3xl border-sky-500/30 flex flex-col gap-4">
+            <div class="flex justify-between items-center border-b border-white/10 pb-3">
+                <h3 class="font-title text-2xl text-sky-300 flex items-center gap-2">
+                    <i class="fa-solid fa-briefcase text-amber-400"></i> Hero's Backpack
+                </h3>
+                <button onclick="toggleWindow('inventory-modal')" class="text-slate-400 hover:text-white text-xl">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Inventory Grid (12 slots) -->
+            <div id="inventory-grid" class="grid grid-cols-4 gap-3 p-2 bg-slate-900/60 rounded-2xl border border-white/5 min-h-[240px]">
+                <!-- Slots populated dynamically -->
+            </div>
+
+            <div id="item-description" class="p-3 bg-slate-900/80 rounded-xl border border-white/10 text-xs text-sky-200 min-h-[60px] flex items-center justify-center text-center">
+                Select an item from inventory to inspect or use.
+            </div>
+        </div>
+    </div>
+
+    <div id="skills-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-40 hidden flex items-center justify-center p-4">
+        <div class="glass-panel max-w-2xl w-full p-6 rounded-3xl border-amber-500/30 flex flex-col gap-5">
+            <div class="flex justify-between items-center border-b border-white/10 pb-3">
+                <h3 class="font-title text-2xl text-amber-300 flex items-center gap-2">
+                    <i class="fa-solid fa-brain text-amber-400"></i> Friendship Skill Tree
+                </h3>
+                <div class="flex items-center gap-3">
+                    <span id="skill-points-display" class="text-xs bg-amber-500/20 text-amber-300 px-3 py-1 rounded-full border border-amber-500/40 font-bold">
+                        Skill Points: 0
+                    </span>
+                    <button onclick="toggleWindow('skills-modal')" class="text-slate-400 hover:text-white text-xl">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Character Stats -->
+            <div class="grid grid-cols-3 gap-3 text-center">
+                <div class="bg-slate-900/60 p-3 rounded-2xl border border-white/5">
+                    <div class="text-xs text-sky-300 font-bold">Agility (Amos)</div>
+                    <div id="stat-agility" class="font-title text-xl text-white mt-1">15</div>
+                </div>
+                <div class="bg-slate-900/60 p-3 rounded-2xl border border-white/5">
+                    <div class="text-xs text-blue-300 font-bold">Max Health (Boris)</div>
+                    <div id="stat-hp" class="font-title text-xl text-white mt-1">100</div>
+                </div>
+                <div class="bg-slate-900/60 p-3 rounded-2xl border border-white/5">
+                    <div class="text-xs text-emerald-300 font-bold">Attack Power</div>
+                    <div id="stat-atk" class="font-title text-xl text-white mt-1">18</div>
+                </div>
+            </div>
+
+            <!-- Skill Nodes -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="p-4 bg-slate-900/60 rounded-2xl border border-sky-500/20 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="font-bold text-sky-300 text-sm">🧀 Mouse Swiftness</span>
+                            <span id="skill-lvl-0" class="text-xs text-amber-400">Lvl 1/5</span>
+                        </div>
+                        <p class="text-xs text-sky-200/70">Increases movement speed and dodge ability in rough seas.</p>
+                    </div>
+                    <button onclick="upgradeSkill(0)" class="mt-3 glass-btn py-1.5 px-3 rounded-xl text-xs font-bold text-sky-300 hover:text-white">
+                        Upgrade (+5% Speed)
+                    </button>
+                </div>
+
+                <div class="p-4 bg-slate-900/60 rounded-2xl border border-sky-500/20 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="font-bold text-blue-300 text-sm">🐋 Whale Tidal Shield</span>
+                            <span id="skill-lvl-1" class="text-xs text-amber-400">Lvl 1/5</span>
+                        </div>
+                        <p class="text-xs text-sky-200/70">Boosts maximum health and armor against tidal ocean bosses.</p>
+                    </div>
+                    <button onclick="upgradeSkill(1)" class="mt-3 glass-btn py-1.5 px-3 rounded-xl text-xs font-bold text-blue-300 hover:text-white">
+                        Upgrade (+20 HP)
+                    </button>
+                </div>
+
+                <div class="p-4 bg-slate-900/60 rounded-2xl border border-sky-500/20 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="font-bold text-purple-300 text-sm">🐘 Elephant Stomp Power</span>
+                            <span id="skill-lvl-2" class="text-xs text-amber-400">Lvl 0/5</span>
+                        </div>
+                        <p class="text-xs text-sky-200/70">Unlocks devastating area stomp attacks through elephant friendship.</p>
+                    </div>
+                    <button onclick="upgradeSkill(2)" class="mt-3 glass-btn py-1.5 px-3 rounded-xl text-xs font-bold text-purple-300 hover:text-white">
+                        Upgrade (+8 Damage)
+                    </button>
+                </div>
+
+                <div class="p-4 bg-slate-900/60 rounded-2xl border border-sky-500/20 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="font-bold text-emerald-300 text-sm">🤝 True Loyalty Aura</span>
+                            <span id="skill-lvl-3" class="text-xs text-amber-400">Lvl 0/5</span>
+                        </div>
+                        <p class="text-xs text-sky-200/70">Moral power that passively regenerates health over time.</p>
+                    </div>
+                    <button onclick="upgradeSkill(3)" class="mt-3 glass-btn py-1.5 px-3 rounded-xl text-xs font-bold text-emerald-300 hover:text-white">
+                        Upgrade (+2 HP/sec)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="quests-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-40 hidden flex items-center justify-center p-4">
+        <div class="glass-panel max-w-lg w-full p-6 rounded-3xl border-emerald-500/30 flex flex-col gap-4">
+            <div class="flex justify-between items-center border-b border-white/10 pb-3">
+                <h3 class="font-title text-2xl text-emerald-300 flex items-center gap-2">
+                    <i class="fa-solid fa-map-location-dot text-emerald-400"></i> Ocean Quest Log
+                </h3>
+                <button onclick="toggleWindow('quests-modal')" class="text-slate-400 hover:text-white text-xl">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div id="quest-list-container" class="space-y-3 max-h-80 overflow-y-auto pr-1">
+                <!-- Quests populated by script -->
+            </div>
+        </div>
+    </div>
+
+    <div id="game-over-modal" class="fixed inset-0 bg-slate-950/90 backdrop-blur-lg z-50 hidden flex items-center justify-center p-4">
+        <div class="glass-panel max-w-md w-full p-8 rounded-3xl text-center flex flex-col items-center gap-5 border-rose-500/40">
+            <div id="game-over-icon" class="text-6xl text-rose-500">☠️</div>
+            <div>
+                <h2 id="game-over-title" class="font-title text-3xl text-rose-400">Swept by the Storm</h2>
+                <p id="game-over-text" class="text-sm text-sky-200/70 mt-2">
+                    Amos and Boris were separated by the relentless ocean waves. True friends never give up!
+                </p>
+            </div>
+            <button onclick="restartGame()" class="glass-btn px-8 py-3 rounded-2xl font-title text-base bg-sky-500 text-white w-full">
+                Try Again
+            </button>
+        </div>
+    </div>
+
+    <script>
+        class SoundEngine {
+            constructor() {
+                this.ctx = null;
+            }
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            }
+            playTone(freq, type, duration, vol = 0.1) {
+                if (!this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = type;
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                    gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + duration);
+                } catch (e) {}
+            }
+            sfxAttack() {
+                this.init();
+                this.playTone(320, 'sawtooth', 0.15, 0.15);
+            }
+            sfxSplash() {
+                this.init();
+                this.playTone(180, 'sine', 0.4, 0.2);
+            }
+            sfxHit() {
+                this.init();
+                this.playTone(100, 'square', 0.2, 0.25);
+            }
+            sfxLevelUp() {
+                this.init();
+                [300, 400, 500, 600, 750].forEach((f, i) => {
+                    setTimeout(() => this.playTone(f, 'triangle', 0.2, 0.15), i * 80);
+                });
+            }
+        }
+        const sounds = new SoundEngine();
+
+        const gameState = {
+            started: false,
+            activeChar: 'amos', // 'amos' (Mouse) or 'boris' (Whale)
+            level: 1,
+            exp: 0,
+            maxExp: 100,
+            skillPoints: 1,
+            stats: {
+                agility: 15,
+                maxHp: 100,
+                hp: 100,
+                atk: 18,
+                regen: 0
+            },
+            skills: [1, 1, 0, 0], // Skill levels
+            inventory: [
+                { id: 'cheese', name: 'Golden Cheese', icon: '🧀', desc: 'Restores 40 HP instantly.', heal: 40 },
+                { id: 'shell', name: 'Turtle Shell Shield', icon: '🐢', desc: 'Increases defense by 5.' },
+                { id: 'coral', name: 'Coral Sword', icon: '🗡️', desc: 'Increases attack power by 8.' },
+                { id: 'buoy', name: 'Lifebuoy', icon: '🛟', desc: 'Saves player from drowning effects.' }
+            ],
+            quests: [
+                { id: 'q1', title: 'Survive the Hurricane', desc: 'Reach the safety island while avoiding rogue wave serpents.', done: false, target: 1 },
+                { id: 'q2', title: 'Locate Boris the Whale', desc: 'Find Boris trapped in the deep tidal reef.', done: false, target: 1 },
+                { id: 'q3', title: 'Elephant Rescue Assist', desc: 'Speak to the Heroic Elephant on the palm beach.', done: false, target: 1 },
+                { id: 'q4', title: 'Defeat Kraken Boss', desc: 'Defeat the Giant Ocean Kraken to keep best friends safe!', done: false, target: 1 }
+            ],
+            activeQuestIndex: 0
+        };
+
+        let scene, camera, renderer;
+        let playerMesh, oceanWater, stormClouds = [];
+        let enemies = [], npcs = [], questMarkers = [], particleEffects = [];
+        let keys = {};
+        let joystickActive = false, joystickVector = { x: 0, y: 0 };
+        const clock = new THREE.Clock();
+
+        function init3DWorld() {
+            const container = document.getElementById('game-container');
+
+            // Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x061a33);
+            scene.fog = new THREE.FogExp2(0x061a33, 0.012);
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 12, 18);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xdff0ff, 0.7);
+            scene.add(ambientLight);
+
+            const sunLight = new THREE.DirectionalLight(0xfff5ea, 1.2);
+            sunLight.position.set(50, 80, 30);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.width = 2048;
+            sunLight.shadow.mapSize.height = 2048;
+            sunLight.shadow.camera.near = 0.5;
+            sunLight.shadow.camera.far = 250;
+            const d = 60;
+            sunLight.shadow.camera.left = -d;
+            sunLight.shadow.camera.right = d;
+            sunLight.shadow.camera.top = d;
+            sunLight.shadow.camera.bottom = -d;
+            scene.add(sunLight);
+
+            // Ocean Floor & Water Surface
+            buildEnvironment();
+
+            // Spawn Player
+            createPlayerMesh();
+
+            // Spawn NPCs and Enemies
+            spawnEntities();
+
+            // Window Resize Listener
+            window.addEventListener('resize', onWindowResize);
+
+            // Input Listeners
+            setupControls();
+
+            // Start Render Loop
+            animate();
+        }
+
+        function buildEnvironment() {
+            // Water Surface Plane
+            const waterGeo = new THREE.PlaneGeometry(300, 300, 64, 64);
+            const waterMat = new THREE.MeshPhongMaterial({
+                color: 0x006699,
+                transparent: true,
+                opacity: 0.82,
+                shininess: 90,
+                flatShading: true
+            });
+            oceanWater = new THREE.Mesh(waterGeo, waterMat);
+            oceanWater.rotation.x = -Math.PI / 2;
+            scene.add(oceanWater);
+
+            // Underwater Sandy Floor
+            const floorGeo = new THREE.PlaneGeometry(300, 300);
+            const floorMat = new THREE.MeshStandardMaterial({ color: 0x112d42 });
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.y = -12;
+            scene.add(floor);
+
+            // Rescue Palm Island
+            const islandGeo = new THREE.CylinderGeometry(18, 24, 6, 16);
+            const islandMat = new THREE.MeshStandardMaterial({ color: 0xd2b48c, roughness: 0.9 });
+            const island = new THREE.Mesh(islandGeo, islandMat);
+            island.position.set(-25, 1, -25);
+            island.receiveShadow = true;
+            scene.add(island);
+
+            // Palm Tree Group
+            for (let i = 0; i < 3; i++) {
+                const trunkGeo = new THREE.CylinderGeometry(0.5, 0.7, 7);
+                const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8b5a2b });
+                const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+                trunk.position.set(-25 + (i * 3 - 3), 5, -25 + (i % 2 * 3));
+                trunk.rotation.z = 0.1 * i;
+                scene.add(trunk);
+
+                const leavesGeo = new THREE.ConeGeometry(3.5, 2, 6);
+                const leavesMat = new THREE.MeshStandardMaterial({ color: 0x2e8b57 });
+                const leaves = new THREE.Mesh(leavesGeo, leavesMat);
+                leaves.position.set(trunk.position.x, 8.5, trunk.position.z);
+                scene.add(leaves);
+            }
+
+            // Storm Clouds
+            for (let i = 0; i < 25; i++) {
+                const cloudGeo = new THREE.DodecahedronGeometry(8 + Math.random() * 6);
+                const cloudMat = new THREE.MeshStandardMaterial({ color: 0x233142, transparent: true, opacity: 0.7 });
+                const cloud = new THREE.Mesh(cloudGeo, cloudMat);
+                cloud.position.set((Math.random() - 0.5) * 200, 25 + Math.random() * 10, (Math.random() - 0.5) * 200);
+                scene.add(cloud);
+                stormClouds.push(cloud);
+            }
+        }
+
+        function createPlayerMesh() {
+            if (playerMesh) scene.remove(playerMesh);
+
+            playerMesh = new THREE.Group();
+
+            if (gameState.activeChar === 'amos') {
+                // Mouse Amos Mesh
+                const bodyGeo = new THREE.SphereGeometry(1, 16, 16);
+                const bodyMat = new THREE.MeshStandardMaterial({ color: 0xd97706 }); // Amber
+                const body = new THREE.Mesh(bodyGeo, bodyMat);
+                body.position.y = 1;
+                body.castShadow = true;
+                playerMesh.add(body);
+
+                // Ears
+                const earGeo = new THREE.SphereGeometry(0.4, 8, 8);
+                const earMat = new THREE.MeshStandardMaterial({ color: 0xfcb366 });
+                const earL = new THREE.Mesh(earGeo, earMat);
+                earL.position.set(-0.7, 1.7, 0.3);
+                const earR = earL.clone();
+                earR.position.x = 0.7;
+                playerMesh.add(earL);
+                playerMesh.add(earR);
+
+                // Snout
+                const noseGeo = new THREE.ConeGeometry(0.3, 0.6, 8);
+                const noseMat = new THREE.MeshStandardMaterial({ color: 0x1e293b });
+                const nose = new THREE.Mesh(noseGeo, noseMat);
+                nose.rotation.x = Math.PI / 2;
+                nose.position.set(0, 1, 1.1);
+                playerMesh.add(nose);
+            } else {
+                // Whale Boris Mesh
+                const bodyGeo = new THREE.CapsuleGeometry(1.8, 3, 16, 16);
+                const bodyMat = new THREE.MeshStandardMaterial({ color: 0x0284c7 }); // Sky Blue
+                const body = new THREE.Mesh(bodyGeo, bodyMat);
+                body.rotation.x = Math.PI / 2;
+                body.position.y = 1.2;
+                body.castShadow = true;
+                playerMesh.add(body);
+
+                // Tail Fin
+                const tailGeo = new THREE.BoxGeometry(2, 0.2, 1);
+                const tailMat = new THREE.MeshStandardMaterial({ color: 0x0369a1 });
+                const tail = new THREE.Mesh(tailGeo, tailMat);
+                tail.position.set(0, 1.2, -2.5);
+                playerMesh.add(tail);
+            }
+
+            playerMesh.position.set(0, 0, 0);
+            scene.add(playerMesh);
+        }
+
+        function spawnEntities() {
+            // 1. Heroic Elephant NPC
+            const elephantGroup = new THREE.Group();
+            const eBody = new THREE.Mesh(
+                new THREE.BoxGeometry(3, 2.5, 4),
+                new THREE.MeshStandardMaterial({ color: 0x64748b })
+            );
+            eBody.position.y = 2;
+            eBody.castShadow = true;
+            elephantGroup.add(eBody);
+
+            const eTrunk = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.3, 0.4, 2),
+                new THREE.MeshStandardMaterial({ color: 0x475569 })
+            );
+            eTrunk.position.set(0, 1.8, 2.3);
+            eTrunk.rotation.x = -0.4;
+            elephantGroup.add(eTrunk);
+
+            elephantGroup.position.set(-22, 0, -20);
+            scene.add(elephantGroup);
+            npcs.push({ mesh: elephantGroup, name: 'Heroic Elephant', id: 'elephant', type: 'npc' });
+
+            // Quest Marker Beacon over Elephant
+            const markerGeo = new THREE.OctahedronGeometry(0.8);
+            const markerMat = new THREE.MeshBasicMaterial({ color: 0xf59e0b, wireframe: true });
+            const marker = new THREE.Mesh(markerGeo, markerMat);
+            marker.position.set(-22, 5, -20);
+            scene.add(marker);
+            questMarkers.push(marker);
+
+            // 2. Boris trapped position (for rescue quest)
+            const borisNPC = new THREE.Mesh(
+                new THREE.SphereGeometry(2, 16, 16),
+                new THREE.MeshStandardMaterial({ color: 0x38bdf8 })
+            );
+            borisNPC.position.set(35, 0, -30);
+            scene.add(borisNPC);
+            npcs.push({ mesh: borisNPC, name: 'Boris (Trapped Whale)', id: 'boris_trapped', type: 'npc' });
+
+            // 3. Enemies: Shadow Wave Sharks
+            for (let i = 0; i < 5; i++) {
+                spawnSharkEnemy((Math.random() - 0.5) * 80, (Math.random() - 0.5) * 80);
+            }
+
+            // 4. Boss: Giant Ocean Kraken
+            spawnKrakenBoss(0, 0, -60);
+        }
+
+        function spawnSharkEnemy(x, z) {
+            const shark = new THREE.Group();
+            const body = new THREE.Mesh(
+                new THREE.ConeGeometry(0.8, 3, 8),
+                new THREE.MeshStandardMaterial({ color: 0xd97706 }) // Aggressive Shark
+            );
+            body.rotation.x = Math.PI / 2;
+            body.position.y = 0.5;
+            shark.add(body);
+
+            shark.position.set(x, 0, z);
+            scene.add(shark);
+
+            enemies.push({
+                mesh: shark,
+                hp: 50,
+                maxHp: 50,
+                atk: 10,
+                speed: 0.08,
+                isBoss: false
+            });
+        }
+
+        function spawnKrakenBoss(x, y, z) {
+            const kraken = new THREE.Group();
+            // Core
+            const core = new THREE.Mesh(
+                new THREE.SphereGeometry(4, 16, 16),
+                new THREE.MeshStandardMaterial({ color: 0xe11d48, roughness: 0.4 }) // Deep Rose Kraken
+            );
+            core.position.y = 2;
+            kraken.add(core);
+
+            // Tentacles
+            for (let i = 0; i < 6; i++) {
+                const tentacle = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.5, 1.2, 8, 8),
+                    new THREE.MeshStandardMaterial({ color: 0x9f1239 })
+                );
+                const angle = (i / 6) * Math.PI * 2;
+                tentacle.position.set(Math.cos(angle) * 5, 2, Math.sin(angle) * 5);
+                tentacle.rotation.z = Math.PI / 4;
+                kraken.add(tentacle);
+            }
+
+            kraken.position.set(x, y, z);
+            scene.add(kraken);
+
+            enemies.push({
+                mesh: kraken,
+                hp: 300,
+                maxHp: 300,
+                atk: 25,
+                speed: 0.03,
+                isBoss: true
+            });
+        }
+
+        function setupControls() {
+            window.addEventListener('keydown', (e) => {
+                keys[e.key.toLowerCase()] = true;
+                if (e.key === ' ') performAttack();
+                if (e.key.toLowerCase() === 'q') useSkill(0);
+                if (e.key.toLowerCase() === 'e') useSkill(1);
+                if (e.key.toLowerCase() === 'r') useSkill(2);
+                if (e.key.toLowerCase() === 'f') interactWithNPC();
+            });
+
+            window.addEventListener('keyup', (e) => {
+                keys[e.key.toLowerCase()] = false;
+            });
+
+            // Touch Joystick Setup
+            const joystickZone = document.getElementById('joystick-zone');
+            const joystickKnob = document.getElementById('joystick-knob');
+
+            if ('ontouchstart' in window) {
+                joystickZone.style.display = 'block';
+            }
+
+            let startX, startY;
+            joystickZone.addEventListener('touchstart', (e) => {
+                joystickActive = true;
+                const touch = e.touches[0];
+                startX = touch.clientX;
+                startY = touch.clientY;
+            });
+
+            joystickZone.addEventListener('touchmove', (e) => {
+                if (!joystickActive) return;
+                const touch = e.touches[0];
+                const dx = touch.clientX - startX;
+                const dy = touch.clientY - startY;
+                const dist = Math.min(Math.hypot(dx, dy), 40);
+                const angle = Math.atan2(dy, dx);
+
+                joystickKnob.style.transform = `translate(${Math.cos(angle) * dist}px, ${Math.sin(angle) * dist}px)`;
+                joystickVector.x = (Math.cos(angle) * dist) / 40;
+                joystickVector.y = (Math.sin(angle) * dist) / 40;
+            });
+
+            const resetJoystick = () => {
+                joystickActive = false;
+                joystickVector = { x: 0, y: 0 };
+                joystickKnob.style.transform = `translate(0px, 0px)`;
+            };
+
+            joystickZone.addEventListener('touchend', resetJoystick);
+            joystickZone.addEventListener('touchcancel', resetJoystick);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (!gameState.started) return;
+
+            const delta = clock.getDelta();
+            const time = clock.getElapsedTime();
+
+            // 1. Water Surface Animation
+            if (oceanWater) {
+                const pos = oceanWater.geometry.attributes.position;
+                for (let i = 0; i < pos.count; i++) {
+                    const u = pos.getX(i);
+                    const v = pos.getY(i);
+                    const z = Math.sin(time * 2 + u * 0.1) * 0.4 + Math.cos(time * 1.5 + v * 0.1) * 0.4;
+                    pos.setZ(i, z);
+                }
+                pos.needsUpdate = true;
+            }
+
+            // 2. Player Movement
+            let moveX = 0, moveZ = 0;
+            if (keys['w'] || keys['arrowup']) moveZ -= 1;
+            if (keys['s'] || keys['arrowdown']) moveZ += 1;
+            if (keys['a'] || keys['arrowleft']) moveX -= 1;
+            if (keys['d'] || keys['arrowright']) moveX += 1;
+
+            if (joystickActive) {
+                moveX = joystickVector.x;
+                moveZ = joystickVector.y;
+            }
+
+            if (moveX !== 0 || moveZ !== 0) {
+                const speed = 0.18 + (gameState.skills[0] * 0.02);
+                playerMesh.position.x += moveX * speed;
+                playerMesh.position.z += moveZ * speed;
+
+                // Rotate player towards movement direction
+                const angle = Math.atan2(moveX, moveZ);
+                playerMesh.rotation.y = angle;
+            }
+
+            // Keep player within ocean bounds
+            playerMesh.position.x = Math.max(-130, Math.min(130, playerMesh.position.x));
+            playerMesh.position.z = Math.max(-130, Math.min(130, playerMesh.position.z));
+
+            // Floating bobbing effect
+            playerMesh.position.y = Math.sin(time * 3) * 0.2;
+
+            // Camera follow player smoothly
+            camera.position.x = THREE.MathUtils.lerp(camera.position.x, playerMesh.position.x, 0.08);
+            camera.position.z = THREE.MathUtils.lerp(camera.position.z, playerMesh.position.z + 18, 0.08);
+            camera.position.y = THREE.MathUtils.lerp(camera.position.y, playerMesh.position.y + 14, 0.08);
+            camera.lookAt(playerMesh.position.x, playerMesh.position.y + 1, playerMesh.position.z);
+
+            // 3. Enemy AI & Interactions
+            enemies.forEach((enemy, idx) => {
+                if (enemy.hp <= 0) return;
+
+                // Move towards player
+                const dist = enemy.mesh.position.distanceTo(playerMesh.position);
+                if (dist < 35 && dist > 2) {
+                    const dir = new THREE.Vector3().subVectors(playerMesh.position, enemy.mesh.position).normalize();
+                    enemy.mesh.position.addScaledVector(dir, enemy.speed);
+                    enemy.mesh.lookAt(playerMesh.position);
+                }
+
+                // Attack Player on touch
+                if (dist < 2.5) {
+                    takeDamage(enemy.atk * delta);
+                }
+
+                // Boss Tentacle Wave Animation
+                if (enemy.isBoss) {
+                    enemy.mesh.rotation.y += 0.01;
+                }
+            });
+
+            // 4. Quest Markers Animation
+            questMarkers.forEach(m => {
+                m.rotation.y += 0.03;
+                m.position.y = 5 + Math.sin(time * 4) * 0.5;
+            });
+
+            // 5. HP Passive Regeneration
+            if (gameState.skills[3] > 0 && gameState.stats.hp < gameState.stats.maxHp) {
+                gameState.stats.hp = Math.min(gameState.stats.maxHp, gameState.stats.hp + (gameState.skills[3] * 0.02));
+                updateHUD();
+            }
+
+            // Render Minimap Radar
+            renderMinimap();
+
+            // Render Main Scene
+            renderer.render(scene, camera);
+        }
+
+        function performAttack() {
+            sounds.sfxAttack();
+
+            // Create Slash visual effect
+            const slashGeo = new THREE.RingGeometry(0.5, 2.5, 16, 1, 0, Math.PI);
+            const slashMat = new THREE.MeshBasicMaterial({ color: 0xf59e0b, side: THREE.DoubleSide, transparent: true, opacity: 0.8 });
+            const slash = new THREE.Mesh(slashGeo, slashMat);
+            slash.rotation.x = -Math.PI / 2;
+            slash.position.copy(playerMesh.position);
+            slash.position.y = 1;
+            slash.rotation.z = -playerMesh.rotation.y;
+            scene.add(slash);
+
+            setTimeout(() => scene.remove(slash), 200);
+
+            // Damage nearby enemies
+            enemies.forEach(enemy => {
+                if (enemy.hp <= 0) return;
+                const dist = enemy.mesh.position.distanceTo(playerMesh.position);
+                if (dist < 4.5) {
+                    const dmg = gameState.stats.atk + Math.floor(Math.random() * 6);
+                    enemy.hp -= dmg;
+                    sounds.sfxHit();
+                    spawnDamageText(enemy.mesh.position, dmg);
+
+                    if (enemy.hp <= 0) {
+                        scene.remove(enemy.mesh);
+                        addEXP(enemy.isBoss ? 150 : 35);
+                    }
+                }
+            });
+        }
+
+        function useSkill(index) {
+            if (index === 0) { // Dash
+                sounds.sfxSplash();
+                playerMesh.translateZ(6);
+            } else if (index === 1) { // Tidal Splash
+                sounds.sfxSplash();
+                enemies.forEach(enemy => {
+                    const dist = enemy.mesh.position.distanceTo(playerMesh.position);
+                    if (dist < 10) {
+                        enemy.hp -= 25;
+                        spawnDamageText(enemy.mesh.position, 25);
+                    }
+                });
+            } else if (index === 2) { // Elephant Stomp
+                sounds.sfxHit();
+                enemies.forEach(enemy => {
+                    const dist = enemy.mesh.position.distanceTo(playerMesh.position);
+                    if (dist < 12) {
+                        enemy.hp -= 40;
+                        spawnDamageText(enemy.mesh.position, 40);
+                    }
+                });
+            }
+        }
+
+        function takeDamage(amount) {
+            gameState.stats.hp -= amount;
+            if (gameState.stats.hp <= 0) {
+                gameState.stats.hp = 0;
+                gameOver();
+            }
+            updateHUD();
+        }
+
+        function spawnDamageText(pos, amount) {
+            const popup = document.createElement('div');
+            popup.className = 'damage-popup text-amber-400 font-bold text-lg';
+            popup.innerText = `-${amount}`;
+            document.body.appendChild(popup);
+
+            // Project 3D pos to 2D screen
+            const vector = pos.clone().project(camera);
+            const x = (vector.x * .5 + .5) * window.innerWidth;
+            const y = (-(vector.y * .5) + .5) * window.innerHeight;
+
+            popup.style.left = `${x}px`;
+            popup.style.top = `${y}px`;
+
+            setTimeout(() => popup.remove(), 800);
+        }
+
+        function addEXP(amount) {
+            gameState.exp += amount;
+            if (gameState.exp >= gameState.maxExp) {
+                gameState.exp -= gameState.maxExp;
+                gameState.level += 1;
+                gameState.maxExp = Math.floor(gameState.maxExp * 1.5);
+                gameState.skillPoints += 2;
+                gameState.stats.maxHp += 20;
+                gameState.stats.hp = gameState.stats.maxHp;
+                gameState.stats.atk += 5;
+
+                sounds.sfxLevelUp();
+                showNotification(`🎉 LEVEL UP! You reached Level ${gameState.level}!`);
+            }
+            updateHUD();
+        }
+
+        function renderMinimap() {
+            const canvas = document.getElementById('minimap-canvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width = canvas.clientWidth;
+            const h = canvas.height = canvas.clientHeight;
+
+            ctx.clearRect(0, 0, w, h);
+
+            // Center is Player
+            const centerX = w / 2;
+            const centerY = h / 2;
+            const scale = 0.8;
+
+            // Draw Enemies on Radar
+            enemies.forEach(e => {
+                if (e.hp <= 0) return;
+                const relX = (e.mesh.position.x - playerMesh.position.x) * scale;
+                const relZ = (e.mesh.position.z - playerMesh.position.z) * scale;
+
+                ctx.fillStyle = e.isBoss ? '#f43f5e' : '#fb923c';
+                ctx.beginPath();
+                ctx.arc(centerX + relX, centerY + relZ, e.isBoss ? 5 : 3, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Draw NPCs on Radar
+            npcs.forEach(npc => {
+                const relX = (npc.mesh.position.x - playerMesh.position.x) * scale;
+                const relZ = (npc.mesh.position.z - playerMesh.position.z) * scale;
+
+                ctx.fillStyle = '#38bdf8';
+                ctx.beginPath();
+                ctx.arc(centerX + relX, centerY + relZ, 4, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        function interactWithNPC() {
+            // Find closest NPC
+            let closest = null;
+            let minDist = 8;
+
+            npcs.forEach(npc => {
+                const dist = npc.mesh.position.distanceTo(playerMesh.position);
+                if (dist < minDist) {
+                    minDist = dist;
+                    closest = npc;
+                }
+            });
+
+            if (closest) {
+                document.getElementById('npc-name').innerText = closest.name;
+                document.getElementById('dialogue-modal').classList.remove('hidden');
+
+                if (closest.id === 'elephant') {
+                    document.getElementById('npc-dialogue-text').innerText = 
+                        "Greeting, brave Amos! I am the Heroic Elephant. Boris is trapped further in the reef by rogue waves. Let us fight together to save your best friend!";
+                } else if (closest.id === 'boris_trapped') {
+                    document.getElementById('npc-dialogue-text').innerText = 
+                        "Amos! You found me! True best friends never betray each other! Defeat the Kraken to set us free!";
+                    completeQuest('q2');
+                }
+            }
+        }
+
+        function acceptNPCQuest() {
+            closeDialogue();
+            completeQuest('q1');
+            showNotification("📜 Quest Updated: Reach Boris the Trapped Whale!");
+        }
+
+        function completeQuest(questId) {
+            const q = gameState.quests.find(x => x.id === questId);
+            if (q && !q.done) {
+                q.done = true;
+                addEXP(100);
+                showNotification(`✅ Quest Completed: ${q.title}!`);
+                updateQuestUI();
+            }
+        }
+
+        function updateHUD() {
+            document.getElementById('hp-bar').style.width = `${(gameState.stats.hp / gameState.stats.maxHp) * 100}%`;
+            document.getElementById('hp-text').innerText = `${Math.ceil(gameState.stats.hp)} / ${gameState.stats.maxHp}`;
+            document.getElementById('exp-bar').style.width = `${(gameState.exp / gameState.maxExp) * 100}%`;
+            document.getElementById('char-level').innerText = `Lvl ${gameState.level}`;
+
+            document.getElementById('stat-agility').innerText = gameState.stats.agility;
+            document.getElementById('stat-hp').innerText = gameState.stats.maxHp;
+            document.getElementById('stat-atk').innerText = gameState.stats.atk;
+            document.getElementById('skill-points-display').innerText = `Skill Points: ${gameState.skillPoints}`;
+        }
+
+        function updateQuestUI() {
+            const container = document.getElementById('quest-list-container');
+            container.innerHTML = '';
+
+            gameState.quests.forEach(q => {
+                const item = document.createElement('div');
+                item.className = `p-3 rounded-2xl border ${q.done ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300' : 'bg-slate-900/60 border-white/10 text-sky-100'} flex items-start gap-3`;
+                item.innerHTML = `
+                    <div class="text-xl">${q.done ? '✅' : '📜'}</div>
+                    <div class="flex-1">
+                        <div class="font-bold text-sm">${q.title}</div>
+                        <div class="text-xs opacity-80 mt-0.5">${q.desc}</div>
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function renderInventoryUI() {
+            const grid = document.getElementById('inventory-grid');
+            grid.innerHTML = '';
+
+            for (let i = 0; i < 12; i++) {
+                const item = gameState.inventory[i];
+                const slot = document.createElement('button');
+                slot.className = 'glass-btn h-16 rounded-xl flex items-center justify-center text-2xl relative group';
+
+                if (item) {
+                    slot.innerHTML = item.icon;
+                    slot.onclick = () => {
+                        document.getElementById('item-description').innerText = `${item.name}: ${item.desc}`;
+                    };
+                } else {
+                    slot.classList.add('opacity-30');
+                }
+                grid.appendChild(slot);
+            }
+        }
+
+        function switchCharacter() {
+            selectCharacter(gameState.activeChar === 'amos' ? 'boris' : 'amos');
+        }
+
+        function selectCharacter(charType) {
+            gameState.activeChar = charType;
+            if (charType === 'amos') {
+                document.getElementById('char-name').innerText = 'Amos (Mouse)';
+                document.getElementById('char-avatar').innerText = '🐭';
+                document.getElementById('char-class-tag').innerText = 'Agility';
+            } else {
+                document.getElementById('char-name').innerText = 'Boris (Whale)';
+                document.getElementById('char-avatar').innerText = '🐳';
+                document.getElementById('char-class-tag').innerText = 'Tank / Water';
+            }
+            createPlayerMesh();
+        }
+
+        function upgradeSkill(skillIdx) {
+            if (gameState.skillPoints > 0) {
+                gameState.skillPoints -= 1;
+                gameState.skills[skillIdx] += 1;
+                document.getElementById(`skill-lvl-${skillIdx}`).innerText = `Lvl ${gameState.skills[skillIdx]}/5`;
+                
+                if (skillIdx === 1) gameState.stats.maxHp += 20;
+                if (skillIdx === 2) gameState.stats.atk += 8;
+
+                updateHUD();
+            } else {
+                showNotification("⚠️ Not enough Skill Points!");
+            }
+        }
+
+        function toggleWindow(id) {
+            const modal = document.getElementById(id);
+            modal.classList.toggle('hidden');
+            if (id === 'inventory-modal') renderInventoryUI();
+            if (id === 'quests-modal') updateQuestUI();
+        }
+
+        function closeDialogue() {
+            document.getElementById('dialogue-modal').classList.add('hidden');
+        }
+
+        function showNotification(msg) {
+            const notif = document.createElement('div');
+            notif.className = 'fixed top-20 left-1/2 -translate-x-1/2 glass-panel px-6 py-3 rounded-2xl text-amber-300 font-bold text-sm shadow-2xl z-50 border-amber-400/40 animate-bounce';
+            notif.innerText = msg;
+            document.body.appendChild(notif);
+            setTimeout(() => notif.remove(), 2500);
+        }
+
+        function gameOver() {
+            gameState.started = false;
+            document.getElementById('game-over-modal').classList.remove('hidden');
+        }
+
+        function restartGame() {
+            gameState.stats.hp = gameState.stats.maxHp;
+            playerMesh.position.set(0, 0, 0);
+            document.getElementById('game-over-modal').classList.add('hidden');
+            gameState.started = true;
+            updateHUD();
+        }
+
+        function startGame() {
+            document.getElementById('story-modal').classList.add('hidden');
+            gameState.started = true;
+            updateHUD();
+            updateQuestUI();
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        window.onload = function() {
+            init3DWorld();
+        };
+    </script>
+</body>
+</html>
